@@ -8,10 +8,11 @@
 
 using vec3 = glm::vec3;
 
-#define NUM_OF_ITERATIONS 5
-#define TIMESTAMP 0.00001f
+#define NUM_OF_ITERATIONS 1
+#define TIMESTAMP 0.01f
 #define WIDTH 800
 #define HEIGHT 600
+#define drag 0.001f
 
 #define logInfo(msg) std::cout << msg << std::endl;
 #define logDebug(msg) std::cout << msg << std::endl;
@@ -47,7 +48,7 @@ private:
 
 
 private:
-	vec3 m_gravity = {0, -1, 0};
+	vec3 m_gravity = {0, .5f, 0};
 	float m_timestamp = TIMESTAMP;
 
 	std::vector<Particle> m_particles;
@@ -74,9 +75,7 @@ void ParticleSystem::verlet()
 		vec3 temp_x = x;
 		vec3& old_x = p.m_previousPos;
 		vec3& a = p.m_forceAccumulations;
-
-		x += x - old_x + a * m_timestamp * m_timestamp;
-
+		x += (x - old_x) + a * m_timestamp * m_timestamp;
 		old_x = temp_x;
 	}
 }
@@ -89,7 +88,7 @@ void ParticleSystem::satisfyContraints()
 		for (auto& p : m_particles)
 		{
 			vec3& v = p.m_currentPos;
-			glm::min(glm::max(v, { 0,0,0 }), { WIDTH,HEIGHT,HEIGHT });
+			v = glm::min(glm::max(v, { 0,0,0 }), { WIDTH,HEIGHT,HEIGHT });
 		}
 
 		// satisfy contsraints
@@ -105,7 +104,7 @@ void ParticleSystem::satisfyContraints()
 		}
 
 		// Constrain one particle of the cloth to orig
-		m_particles[0].m_currentPos = { WIDTH / 2 , HEIGHT / 2, 0 };
+		//m_particles[0].m_currentPos = { WIDTH / 2 , HEIGHT / 2, 0 };
 
 	}
 }
@@ -141,12 +140,19 @@ int main()
 {
 	ParticleSystem ps;
 
-	ps.addParticle({ vec3{ WIDTH, HEIGHT, 0 }, vec3{ WIDTH, HEIGHT, 0 }, vec3{ 0, 0, 0 } });
-	ps.addParticle({ vec3{ WIDTH + 10, HEIGHT, 0 }, vec3{ WIDTH + 10, HEIGHT, 0 }, vec3{ 0, 0, 0 } });
-	ps.addParticle({ vec3{ WIDTH + 20, HEIGHT, 0 }, vec3{ WIDTH + 20, HEIGHT, 0 }, vec3{ 0, 0, 0 } });
+	vec3 origin = { WIDTH / 2, HEIGHT / 2, 0 };
 
-	ps.addConstraint({ 0, 1, 10 });
-	ps.addConstraint({ 1, 2, 10 });
+	ps.addParticle({ origin, origin, vec3{ 0, 0, 0 } });
+	ps.addParticle({ origin + vec3{100,0,0}, origin + vec3{ 100,0,0 }, vec3{ 0, 0, 0 } });
+	ps.addParticle({ origin + vec3{100,100,0}, origin + vec3{ 100,100,0 }, vec3{ 0, 0, 0 } });
+	ps.addParticle({ origin + vec3{0,100,0}, origin + vec3{ 0,100,0 }, vec3{ 0, 0, 0 } });
+	//ps.addParticle({ origin + vec3{20,0,0}, origin + vec3{ 20,0,0 }, vec3{ 0, 0, 0 } });
+
+	ps.addConstraint({ 0, 1, 100 });
+	ps.addConstraint({ 1, 2, 100 });
+	ps.addConstraint({ 2, 3, 100 });
+	ps.addConstraint({ 3, 0, 100 });
+	//ps.addConstraint({ 1, 2, 10 });
 	
 	sf::RenderWindow window(sf::VideoMode({ WIDTH, HEIGHT }), "Cloth simulation", sf::Style::Close);
 
