@@ -2,14 +2,28 @@
 
 #include <glm/glm.hpp>
 #include <vector>
+#include <functional>
+
+#include <SFML/Graphics.hpp>
 
 using vec3 = glm::vec3;
 
-#define NUM_OF_PARTICLES 100
 #define NUM_OF_ITERATIONS 5
 #define TIMESTAMP 0.00001f
 #define WIDTH 800
 #define HEIGHT 600
+
+#define logInfo(msg) std::cout << msg << std::endl;
+#define logDebug(msg) std::cout << msg << std::endl;
+#define logWarning(msg) std::cout << msg << std::endl;
+#define logError(msg) std::cout << msg << std::endl;
+
+struct Particle
+{
+	vec3 m_currentPos;
+	vec3 m_previousPos;
+	vec3 m_forceAccumulations;
+};
 
 struct Constraint
 {
@@ -23,19 +37,20 @@ class ParticleSystem
 public:
 	ParticleSystem();
 	void step();
+	void addConstraint(const Constraint& c);
+	void addParticle(const Particle& p);
+	void draw(std::function<void(const Particle&)> cb) const;
 private:
 	void verlet();
 	void satisfyContraints();
 	void accumulateForces();
 
-	void applyConstraint(const Constraint& constraint);
+
 private:
-	vec3 m_currentPos[NUM_OF_PARTICLES]{};
-	vec3 m_previousPos[NUM_OF_PARTICLES]{};
-	vec3 m_forceAccumulations[NUM_OF_PARTICLES]{};
-	vec3 m_gravity = {0,0,1};
+	vec3 m_gravity = {0, -1, 0};
 	float m_timestamp = TIMESTAMP;
 
+	std::vector<Particle> m_particles;
 	std::vector<Constraint> m_constraints;
 };
 
@@ -53,12 +68,12 @@ void ParticleSystem::step()
 
 void ParticleSystem::verlet()
 {
-	for (int i = 0; i < NUM_OF_PARTICLES; i++)
+	for (auto& p : m_particles)
 	{
-		vec3& x = m_currentPos[i];
+		vec3& x = p.m_currentPos;
 		vec3 temp_x = x;
-		vec3& old_x = m_previousPos[i];
-		vec3& a = m_forceAccumulations[i];
+		vec3& old_x = p.m_previousPos;
+		vec3& a = p.m_forceAccumulations;
 
 		x += x - old_x + a * m_timestamp * m_timestamp;
 
@@ -71,17 +86,17 @@ void ParticleSystem::satisfyContraints()
 	for (int i = 0; i < NUM_OF_ITERATIONS; i++)
 	{
 		//satisfy bounds
-		for (int j = 0; j < NUM_OF_PARTICLES; j++)
+		for (auto& p : m_particles)
 		{
-			vec3& v = m_currentPos[j];
-			glm::min(glm::max(v, { 0,0,0 }), {WIDTH,HEIGHT,HEIGHT});
+			vec3& v = p.m_currentPos;
+			glm::min(glm::max(v, { 0,0,0 }), { WIDTH,HEIGHT,HEIGHT });
 		}
 
 		// satisfy contsraints
 		for (const auto& c : m_constraints)
 		{
-			vec3& v1 = m_currentPos[c.particleA];
-			vec3& v2 = m_currentPos[c.particleB];
+			vec3& v1 = m_particles[c.particleA].m_currentPos;
+			vec3& v2 = m_particles[c.particleB].m_currentPos;
 			vec3 delta = v2 - v1;
 			float deltaLength = glm::length(delta);
 			float diff = (deltaLength - c.restLength) / deltaLength;
@@ -89,28 +104,78 @@ void ParticleSystem::satisfyContraints()
 			v2 -= delta * .5f * diff;
 		}
 
+		// Constrain one particle of the cloth to orig
+		m_particles[0].m_currentPos = { WIDTH / 2 , HEIGHT / 2, 0 };
+
 	}
 }
 
 void ParticleSystem::accumulateForces()
 {
-	for (int i = 0; i < NUM_OF_PARTICLES; i++)
+	for (auto& p : m_particles)
 	{
-		m_forceAccumulations[i] = m_gravity;
+		p.m_forceAccumulations = m_gravity;
 	}
 }
 
-void ParticleSystem::applyConstraint(const Constraint& constraint)
+void ParticleSystem::addConstraint(const Constraint& c)
 {
-	m_constraints.push_back(constraint);
+	m_constraints.push_back(c);
+}
+
+void ParticleSystem::addParticle(const Particle& p)
+{
+	m_particles.push_back(p);
+}
+
+void ParticleSystem::draw(std::function<void(const Particle& particle)> cb) const
+{
+	for (const auto& p : m_particles)
+	{
+		cb(p);
+	}
+	
 }
 
 int main()
 {
 	ParticleSystem ps;
+
+	ps.addParticle({ vec3{ WIDTH, HEIGHT, 0 }, vec3{ WIDTH, HEIGHT, 0 }, vec3{ 0, 0, 0 } });
+	ps.addParticle({ vec3{ WIDTH + 10, HEIGHT, 0 }, vec3{ WIDTH + 10, HEIGHT, 0 }, vec3{ 0, 0, 0 } });
+	ps.addParticle({ vec3{ WIDTH + 20, HEIGHT, 0 }, vec3{ WIDTH + 20, HEIGHT, 0 }, vec3{ 0, 0, 0 } });
+
+	ps.addConstraint({ 0, 1, 10 });
+	ps.addConstraint({ 1, 2, 10 });
 	
-	while (true)
+	sf::RenderWindow window(sf::VideoMode({ WIDTH, HEIGHT }), "Cloth simulation", sf::Style::Close);
+
+	while (window.isOpen())
 	{
+		window.clear();
+
+		// Process events
+		for (sf::Event event; window.pollEvent(event);)
+		{
+			// Close window: exit
+			if (event.type == sf::Event::Closed)
+				window.close();
+
+			// Escape key: exit
+			if ((event.type == sf::Event::KeyPressed) && (event.key.code == sf::Keyboard::Escape))
+				window.close();
+		}
+
 		ps.step();
+
+		ps.draw([&](const Particle& particle) {
+			sf::Vertex point[1];
+			point[0].position = sf::Vector2f(particle.m_currentPos.x, particle.m_currentPos.y);
+			point[0].color = sf::Color::Red;
+			window.draw(point, 1, sf::Points);
+		});
+
+		// Finally, display the rendered frame on screen
+		window.display();
 	}
 }
