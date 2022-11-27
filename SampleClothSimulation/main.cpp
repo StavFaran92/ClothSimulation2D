@@ -37,18 +37,18 @@ class ParticleSystem
 {
 public:
 	ParticleSystem();
-	void step();
+	void step(float dt);
 	void addConstraint(const Constraint& c);
 	void addParticle(const Particle& p);
 	void draw(std::function<void(const Particle&)> cb) const;
 private:
-	void verlet();
+	void verlet(float dt);
 	void satisfyContraints();
 	void accumulateForces();
 
 
 private:
-	vec3 m_gravity = {0, .5f, 0};
+	vec3 m_gravity = {0, 9.81f, 0};
 	float m_timestamp = TIMESTAMP;
 
 	std::vector<Particle> m_particles;
@@ -60,14 +60,14 @@ ParticleSystem::ParticleSystem()
 
 }
 
-void ParticleSystem::step()
+void ParticleSystem::step(float dt)
 {
 	accumulateForces();
-	verlet();
+	verlet(dt);
 	satisfyContraints();
 }
 
-void ParticleSystem::verlet()
+void ParticleSystem::verlet(float dt)
 {
 	for (auto& p : m_particles)
 	{
@@ -75,7 +75,7 @@ void ParticleSystem::verlet()
 		vec3 temp_x = x;
 		vec3& old_x = p.m_previousPos;
 		vec3& a = p.m_forceAccumulations;
-		x += (x - old_x) + a * m_timestamp * m_timestamp;
+		x += (x - old_x) + a * (dt * dt);
 		old_x = temp_x;
 	}
 }
@@ -104,7 +104,7 @@ void ParticleSystem::satisfyContraints()
 		}
 
 		// Constrain one particle of the cloth to orig
-		//m_particles[0].m_currentPos = { WIDTH / 2 , HEIGHT / 2, 0 };
+		m_particles[0].m_currentPos = { WIDTH / 2 , HEIGHT / 2, 0 };
 
 	}
 }
@@ -144,18 +144,14 @@ int main()
 
 	ps.addParticle({ origin, origin, vec3{ 0, 0, 0 } });
 	ps.addParticle({ origin + vec3{100,0,0}, origin + vec3{ 100,0,0 }, vec3{ 0, 0, 0 } });
-	ps.addParticle({ origin + vec3{100,100,0}, origin + vec3{ 100,100,0 }, vec3{ 0, 0, 0 } });
-	ps.addParticle({ origin + vec3{0,100,0}, origin + vec3{ 0,100,0 }, vec3{ 0, 0, 0 } });
-	//ps.addParticle({ origin + vec3{20,0,0}, origin + vec3{ 20,0,0 }, vec3{ 0, 0, 0 } });
 
 	ps.addConstraint({ 0, 1, 100 });
-	ps.addConstraint({ 1, 2, 100 });
-	ps.addConstraint({ 2, 3, 100 });
-	ps.addConstraint({ 3, 0, 100 });
-	//ps.addConstraint({ 1, 2, 10 });
 	
 	sf::RenderWindow window(sf::VideoMode({ WIDTH, HEIGHT }), "Cloth simulation", sf::Style::Close);
 
+	window.setFramerateLimit(60);
+
+	sf::Clock clock;
 	while (window.isOpen())
 	{
 		window.clear();
@@ -170,9 +166,17 @@ int main()
 			// Escape key: exit
 			if ((event.type == sf::Event::KeyPressed) && (event.key.code == sf::Keyboard::Escape))
 				window.close();
+
+			// Escape key: exit
+			if ((event.type == sf::Event::KeyPressed) && (event.key.code == sf::Keyboard::A))
+				ps.step(1.f);
 		}
 
-		ps.step();
+		ps.step(.1f);
+
+		//sf::Time time = clock.restart();
+		//float dt = (float)time.asMilliseconds() / 1000;
+		//ps.step(dt);
 
 		ps.draw([&](const Particle& particle) {
 			sf::Vertex point[1];
