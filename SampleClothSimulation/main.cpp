@@ -1,18 +1,18 @@
 #include <iostream>
-
 #include <glm/glm.hpp>
 #include <vector>
 #include <functional>
-
 #include <SFML/Graphics.hpp>
 
 using vec3 = glm::vec3;
 
 #define NUM_OF_ITERATIONS 3
-#define TIMESTAMP 0.01f
+#define TIMESTAMP 0.1f
 #define WIDTH 800
 #define HEIGHT 600
-#define drag 0.001f
+#define MAX_FPS 60
+
+static constexpr vec3 g_gravity = { 0, 9.81f, 0 };
 
 #define logInfo(msg) std::cout << msg << std::endl;
 #define logDebug(msg) std::cout << msg << std::endl;
@@ -20,6 +20,9 @@ using vec3 = glm::vec3;
 #define logError(msg) std::cout << msg << std::endl;
 
 class ParticleSystem;
+class Particle;
+class Constraint;
+class Cloth;
 
 class Particle
 {
@@ -113,7 +116,7 @@ public:
 private:
 	Particle* m_particleA = nullptr;
 	Particle* m_particleB = nullptr;
-	float m_restLength;
+	float m_restLength = 0;
 };
 
 Constraint::Constraint(Particle* particleA, Particle* particleB, float restLength)
@@ -139,8 +142,6 @@ class Cloth
 {
 public:
 	Cloth(ParticleSystem& ps, const vec3& pos, int sizeH, int sizeV, int gridSize);
-private:
-
 };
 
 class ParticleSystem
@@ -150,7 +151,6 @@ public:
 	~ParticleSystem();
 	void step(float dt);
 	void addConstraint(const Constraint& c);
-	//void addParticle(const Particle& p);
 	void addParticle(Particle* p);
 	void draw(std::function<void(const Particle* particle)> cb) const;
 	void draw(std::function<void(const Constraint& constraint)> cb) const;
@@ -158,20 +158,14 @@ private:
 	void verlet(float dt);
 	void satisfyContraints();
 	void accumulateForces();
-
-
 private:
-	vec3 m_gravity = {0, 9.81f, 0};
-	float m_timestamp = TIMESTAMP;
-
+	vec3 m_gravity = g_gravity;
 	std::vector<Particle*> m_particles;
 	std::vector<Constraint> m_constraints;
 };
 
 ParticleSystem::ParticleSystem()
-{
-
-}
+{}
 
 ParticleSystem::~ParticleSystem()
 {
@@ -286,13 +280,11 @@ Cloth::Cloth(ParticleSystem& ps, const vec3& pos, int sizeH, int sizeV, int grid
 		}
 	}
 
-	// Constrain one particle of the cloth to orig
-	for (int i = 0; i < sizeH; i+=2)
+	// Constrain tops particle of the cloth
+	for (int i = 0; i < sizeH; i += 2)
 	{
 		particles.at(i)->pin();
 	}
-	//particles.at(0)->pin();
-	//particles.at(sizeH-1)->pin();
 }
 
 int main()
@@ -303,7 +295,7 @@ int main()
 	
 	sf::RenderWindow window(sf::VideoMode({ WIDTH, HEIGHT }), "Cloth simulation", sf::Style::Close);
 
-	window.setFramerateLimit(60);
+	window.setFramerateLimit(MAX_FPS);
 
 	sf::Clock clock;
 	while (window.isOpen())
@@ -322,7 +314,7 @@ int main()
 				window.close();
 		}
 
-		ps.step(.1f);
+		ps.step(TIMESTAMP);
 
 		ps.draw([&](const Constraint& constraint) {
 			sf::Vertex line[2];
