@@ -8,7 +8,7 @@
 
 using vec3 = glm::vec3;
 
-#define NUM_OF_ITERATIONS 1
+#define NUM_OF_ITERATIONS 3
 #define TIMESTAMP 0.01f
 #define WIDTH 800
 #define HEIGHT 600
@@ -135,20 +135,6 @@ float Constraint::getRestLength() const
 	return m_restLength;
 }
 
-class Stick
-{
-public:
-	void draw() const;
-private:
-	Constraint m_constraint;
-
-};
-
-void Stick::draw() const
-{
-}
-
-
 class Cloth
 {
 public:
@@ -167,6 +153,7 @@ public:
 	//void addParticle(const Particle& p);
 	void addParticle(Particle* p);
 	void draw(std::function<void(const Particle* particle)> cb) const;
+	void draw(std::function<void(const Constraint& constraint)> cb) const;
 private:
 	void verlet(float dt);
 	void satisfyContraints();
@@ -259,7 +246,14 @@ void ParticleSystem::draw(std::function<void(const Particle* particle)> cb) cons
 	{
 		cb(p);
 	}
-	
+}
+
+void ParticleSystem::draw(std::function<void(const Constraint& constraint)> cb) const
+{
+	for (const auto& c : m_constraints)
+	{
+		cb(c);
+	}
 }
 
 Cloth::Cloth(ParticleSystem& ps, const vec3& pos, int sizeH, int sizeV, int gridSize)
@@ -273,11 +267,11 @@ Cloth::Cloth(ParticleSystem& ps, const vec3& pos, int sizeH, int sizeV, int grid
 	{
 		for (int j = 0; j < sizeH; j++)
 		{
-			Particle* p = new Particle(origin + vec3{ j * gridSize, i * gridSize, 0 });
+			Particle* p = new Particle(origin + vec3{ j * gridSize, i * gridSize, 0});
 
 			if (i != 0)
 			{
-				Constraint c(p, particles.at((i - 1) * sizeV + j), gridSize);
+				Constraint c(p, particles.at((i - 1) * sizeH + j), gridSize);
 				ps.addConstraint(c);
 			}
 
@@ -293,15 +287,19 @@ Cloth::Cloth(ParticleSystem& ps, const vec3& pos, int sizeH, int sizeV, int grid
 	}
 
 	// Constrain one particle of the cloth to orig
-	particles.at(0)->pin();
-	particles.at(sizeH-1)->pin();
+	for (int i = 0; i < sizeH; i+=2)
+	{
+		particles.at(i)->pin();
+	}
+	//particles.at(0)->pin();
+	//particles.at(sizeH-1)->pin();
 }
 
 int main()
 {
 	ParticleSystem ps;
 
-	Cloth cloth(ps, vec3(100, 100, 0), 10, 10, 10);
+	Cloth cloth(ps, vec3(100, 100, 0), 60, 50, 10);
 	
 	sf::RenderWindow window(sf::VideoMode({ WIDTH, HEIGHT }), "Cloth simulation", sf::Style::Close);
 
@@ -326,12 +324,14 @@ int main()
 
 		ps.step(.1f);
 
-		ps.draw([&](const Particle* particle) {
-			sf::Vertex point[1];
-			point[0].position = sf::Vector2f(particle->getCurrentPos().x, particle->getCurrentPos().y);
-			point[0].color = sf::Color::Red;
-			window.draw(point, 1, sf::Points);
-		});
+		ps.draw([&](const Constraint& constraint) {
+			sf::Vertex line[2];
+			line[0].position = sf::Vector2f(constraint.getParticleA()->getCurrentPos().x, constraint.getParticleA()->getCurrentPos().y);
+			line[0].color = sf::Color::Red;
+			line[1].position = sf::Vector2f(constraint.getParticleB()->getCurrentPos().x, constraint.getParticleB()->getCurrentPos().y);
+			line[1].color = sf::Color::Red;
+			window.draw(line, 2, sf::Lines);
+			});
 
 		// Finally, display the rendered frame on screen
 		window.display();
